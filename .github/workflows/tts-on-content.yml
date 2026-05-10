@@ -43,6 +43,7 @@ jobs:
         run: |
           while IFS= read -r f; do
             [ -z "$f" ] && continue
+            [ -f "$f" ] || continue
             python scripts/generate_tts.py "$f"
           done < /tmp/targets.txt
       - name: Commit audio

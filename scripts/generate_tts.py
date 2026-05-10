@@ -33,7 +33,12 @@ def chunk_text(text: str, max_chars: int = 3000) -> Iterable[str]:
         else:
             if chunk:
                 yield chunk
-            chunk = p
+            if len(p) <= max_chars:
+                chunk = p
+            else:
+                for i in range(0, len(p), max_chars):
+                    yield p[i:i+max_chars]
+                chunk = ""
     if chunk:
         yield chunk
 

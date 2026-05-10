@@ -25,7 +25,8 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           clean_title="${ISSUE_TITLE#\[tts\]}"
-          python scripts/refine_and_save.py --title "$clean_title" --text "$ISSUE_BODY"
+          clean_title="$(echo "$clean_title" | sed 's/^ *//;s/ *$//')"
+          python scripts/refine_and_save.py --title "${clean_title:-untitled}" --text "$ISSUE_BODY"
       - name: Generate TTS for latest content
         run: |
           latest=$(ls -t content/*.md | head -n1)
@@ -35,6 +36,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add content/ audio/
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
           git commit -m "feat(capture): process issue #${{ github.event.issue.number }}"
           git push
       - name: Comment back on issue

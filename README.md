@@ -33,3 +33,8 @@ pip install -r requirements.txt
 python scripts/refine_and_save.py --title "테스트" --text "안녕하세요"
 python scripts/generate_tts.py content/<생성된파일>.md
 ```
+
+
+## 참고
+- 워크플로는 빈 커밋 방지 로직이 포함되어 있습니다.
+- 이슈 제목 `[tts]` 뒤 텍스트가 비어 있으면 `untitled`로 저장됩니다.
