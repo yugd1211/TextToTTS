@@ -1,2 +1,1 @@
-openai>=1.46.0
-python-slugify>=8.0.4
+edge-tts>=6.1.12

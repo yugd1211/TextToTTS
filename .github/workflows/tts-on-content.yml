@@ -28,7 +28,6 @@ jobs:
       - name: Install deps
         run: pip install -r requirements.txt
       - name: Resolve target files
-        id: pick
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             printf '%s\n' '${{ github.event.inputs.content_file }}' > /tmp/targets.txt
@@ -36,15 +35,15 @@ jobs:
             git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^content/.*\.md$' > /tmp/targets.txt || true
           fi
           cat /tmp/targets.txt
-      - name: Generate audio
+      - name: Generate audio (Edge TTS)
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_TTS_MODEL: gpt-4o-mini-tts
-          OPENAI_TTS_VOICE: coral
-          OPENAI_TTS_FORMAT: mp3
+          EDGE_TTS_VOICE: ko-KR-SunHiNeural
+          EDGE_TTS_RATE: +0%
+          EDGE_TTS_PITCH: +0Hz
         run: |
           while IFS= read -r f; do
             [ -z "$f" ] && continue
+            [ -f "$f" ] || continue
             python scripts/generate_tts.py "$f"
           done < /tmp/targets.txt
       - name: Commit audio
@@ -56,5 +55,5 @@ jobs:
             echo "No audio changes"
             exit 0
           fi
-          git commit -m "chore(tts): generate audio"
+          git commit -m "chore(tts): generate audio with edge-tts"
           git push

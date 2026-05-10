@@ -2,55 +2,60 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 from pathlib import Path
 import re
 from typing import Iterable
 
-from openai import OpenAI
+import edge_tts
 
 
 def strip_markdown(text: str) -> str:
+    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
     text = re.sub(r"^#.*$", "", text, flags=re.MULTILINE)
     text = re.sub(r"^\- .*", "", text, flags=re.MULTILINE)
-    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
-def chunk_text(text: str, max_chars: int = 3500) -> Iterable[str]:
+def chunk_text(text: str, max_chars: int = 3000) -> Iterable[str]:
     text = text.strip()
     if len(text) <= max_chars:
         yield text
         return
-
     paragraphs = text.split("\n\n")
     chunk = ""
     for p in paragraphs:
         candidate = f"{chunk}\n\n{p}".strip() if chunk else p
         if len(candidate) <= max_chars:
             chunk = candidate
-            continue
-        if chunk:
-            yield chunk
-        if len(p) <= max_chars:
-            chunk = p
         else:
-            for i in range(0, len(p), max_chars):
-                yield p[i : i + max_chars]
-            chunk = ""
+            if chunk:
+                yield chunk
+            if len(p) <= max_chars:
+                chunk = p
+            else:
+                for i in range(0, len(p), max_chars):
+                    yield p[i:i+max_chars]
+                chunk = ""
     if chunk:
         yield chunk
 
 
+async def tts_to_file(text: str, out_file: Path, voice: str, rate: str, pitch: str) -> None:
+    communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate, pitch=pitch)
+    await communicate.save(str(out_file))
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate TTS audio from markdown/text file")
+    parser = argparse.ArgumentParser(description="Generate TTS audio from markdown/text file using Edge TTS")
     parser.add_argument("input_file")
-    parser.add_argument("--voice", default=os.getenv("OPENAI_TTS_VOICE", "coral"))
-    parser.add_argument("--model", default=os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"))
-    parser.add_argument("--format", default=os.getenv("OPENAI_TTS_FORMAT", "mp3"))
+    parser.add_argument("--voice", default=os.getenv("EDGE_TTS_VOICE", "ko-KR-SunHiNeural"))
+    parser.add_argument("--rate", default=os.getenv("EDGE_TTS_RATE", "+0%"))
+    parser.add_argument("--pitch", default=os.getenv("EDGE_TTS_PITCH", "+0Hz"))
+    parser.add_argument("--format", default="mp3")
     parser.add_argument("--output-dir", default="audio")
-    parser.add_argument("--instructions", default="차분하고 명료한 한국어 오디오북 톤으로 읽어줘.")
     args = parser.parse_args()
 
     source = Path(args.input_file)
@@ -60,33 +65,16 @@ def main() -> None:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    client = OpenAI()
-
-    # 단일 출력 + 분할 출력(긴 텍스트) 모두 지원
     chunks = list(chunk_text(text))
     if len(chunks) == 1:
         out_file = out_dir / f"{source.stem}.{args.format}"
-        with client.audio.speech.with_streaming_response.create(
-            model=args.model,
-            voice=args.voice,
-            input=chunks[0],
-            format=args.format,
-            instructions=args.instructions,
-        ) as response:
-            response.stream_to_file(out_file)
+        asyncio.run(tts_to_file(chunks[0], out_file, args.voice, args.rate, args.pitch))
         print(out_file)
         return
 
     for idx, chunk in enumerate(chunks, start=1):
         out_file = out_dir / f"{source.stem}.part{idx:02d}.{args.format}"
-        with client.audio.speech.with_streaming_response.create(
-            model=args.model,
-            voice=args.voice,
-            input=chunk,
-            format=args.format,
-            instructions=args.instructions,
-        ) as response:
-            response.stream_to_file(out_file)
+        asyncio.run(tts_to_file(chunk, out_file, args.voice, args.rate, args.pitch))
         print(out_file)
 
 

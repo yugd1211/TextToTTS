@@ -6,16 +6,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 import re
 
-from openai import OpenAI
-
-
-SYSTEM_PROMPT = """당신은 사용자의 메모를 '걷거나 뛸 때 듣는 오디오북 스크립트' 형태로 정리하는 편집자입니다.
-출력 형식:
-1) 5줄 이내 핵심 요약
-2) 자연스러운 한국어 오디오 스크립트(너무 딱딱하지 않게)
-사실 왜곡 금지, 불필요한 장식 금지.
-"""
-
 
 def normalize_text(text: str) -> str:
     text = text.replace("\r\n", "\n").strip()
@@ -24,16 +14,13 @@ def normalize_text(text: str) -> str:
     return text
 
 
-def refine_text(source_text: str, model: str) -> str:
-    client = OpenAI()
-    response = client.responses.create(
-        model=model,
-        input=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": normalize_text(source_text)},
-        ],
-    )
-    return response.output_text.strip()
+def simple_refine(source_text: str) -> str:
+    body = normalize_text(source_text)
+    lines = [ln.strip("-• ") for ln in body.splitlines() if ln.strip()]
+    summary = lines[:5]
+    summary_md = "\n".join([f"- {s}" for s in summary]) if summary else "- (요약 생성 실패)"
+    narration = body
+    return f"## 핵심 요약\n\n{summary_md}\n\n## 오디오북용 스크립트\n\n{narration}"
 
 
 def build_markdown(title: str, source_text: str, refined: str) -> str:
@@ -43,12 +30,11 @@ def build_markdown(title: str, source_text: str, refined: str) -> str:
 
 - created_at: {now}
 - source: mobile/web quick capture
+- engine: edge-tts
 
 ## 원문
 
 {body}
-
-## 오디오북용 정리본
 
 {refined}
 """
@@ -59,8 +45,6 @@ def main() -> None:
     parser.add_argument("--title", required=True)
     parser.add_argument("--text", required=True)
     parser.add_argument("--out", default="content")
-    parser.add_argument("--refine-model", default="gpt-4.1-mini")
-    parser.add_argument("--no-refine", action="store_true")
     args = parser.parse_args()
 
     out_dir = Path(args.out)
@@ -69,7 +53,7 @@ def main() -> None:
     safe = re.sub(r"[^a-zA-Z0-9가-힣_-]+", "-", args.title).strip("-").lower()
     filename = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{safe or 'note'}.md"
 
-    refined = normalize_text(args.text) if args.no_refine else refine_text(args.text, args.refine_model)
+    refined = simple_refine(args.text)
 
     out_path = out_dir / filename
     out_path.write_text(build_markdown(args.title, args.text, refined), encoding="utf-8")
