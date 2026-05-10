@@ -1,0 +1,50 @@
+name: Capture Text from Issue and Build Audio
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  capture:
+    if: startsWith(github.event.issue.title, '[tts]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Create markdown from issue
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          clean_title="${ISSUE_TITLE#\[tts\]}"
+          python scripts/refine_and_save.py --title "$clean_title" --text "$ISSUE_BODY"
+      - name: Generate TTS for latest content
+        run: |
+          latest=$(ls -t content/*.md | head -n1)
+          python scripts/generate_tts.py "$latest"
+      - name: Commit generated files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add content/ audio/
+          git commit -m "feat(capture): process issue #${{ github.event.issue.number }}"
+          git push
+      - name: Comment back on issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `처리 완료! (Edge TTS)\n- content/ 와 audio/ 에 결과를 커밋했습니다.\n- 저장소의 최신 커밋에서 mp3를 다운로드하세요.`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
