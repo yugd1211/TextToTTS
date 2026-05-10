@@ -1,8 +1,12 @@
 name: TTS Capture
-about: 휴대폰에서 바로 텍스트를 보내 오디오 파일 생성
+description: 휴대폰에서 바로 텍스트를 보내 오디오 파일 생성
 title: "[tts] 제목을 입력하세요"
 labels: ["tts"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        이 이슈를 생성하면 자동으로 텍스트 정리 + TTS 생성이 실행됩니다.
   - type: textarea
     id: text
     attributes:
