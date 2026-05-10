@@ -42,14 +42,21 @@ jobs:
           fi
           git commit -m "feat(capture): process issue #${{ github.event.issue.number }}"
           git push
-      - name: Comment back on issue
+      - name: Comment and close issue
         uses: actions/github-script@v7
         with:
           script: |
-            const body = `처리 완료! (Edge TTS)\n- content/ 와 audio/ 에 결과를 커밋했습니다.\n- 저장소의 최신 커밋에서 mp3를 다운로드하세요.`;
+            const body = `처리 완료! (Edge TTS)\n- content/ 와 audio/ 에 결과를 커밋했습니다.\n- 저장소의 최신 커밋에서 mp3를 다운로드하세요.\n- 이 이슈는 자동으로 닫힙니다.`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
               body
+            });
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: 'closed'
             });
