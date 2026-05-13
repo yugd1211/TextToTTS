@@ -32,6 +32,8 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python scripts/refine_and_save.py --title "테스트" --text "안녕하세요"
 python scripts/generate_tts.py content/<생성된파일>.md
+# 분할 생성 후 단일 파일로 합치기(ffmpeg 필요)
+python scripts/generate_tts.py content/<생성된파일>.md --merge
 ```
 
 
@@ -41,3 +43,4 @@ python scripts/generate_tts.py content/<생성된파일>.md
 ## TTS 분할 정책
 - 기본 분할 길이: 약 6000자
 - `## 오디오북용 스크립트` 섹션이 있으면 해당 섹션만 음성 변환
+- `--merge` 옵션을 주면 `partXX.mp3`를 생성한 뒤 `full.mp3`로 자동 병합
