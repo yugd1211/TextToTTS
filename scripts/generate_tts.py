@@ -6,6 +6,7 @@ import asyncio
 import os
 from pathlib import Path
 import re
+import subprocess
 from typing import Iterable
 
 import edge_tts
@@ -57,6 +58,39 @@ async def tts_to_file(text: str, out_file: Path, voice: str, rate: str, pitch: s
     await communicate.save(str(out_file))
 
 
+def merge_audio_files(parts: list[Path], output_file: Path) -> None:
+    concat_list = output_file.with_suffix(".concat.txt")
+    concat_list.write_text(
+        "".join(f"file '{part.resolve().as_posix()}'\n" for part in parts),
+        encoding="utf-8",
+    )
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_list),
+                "-c",
+                "copy",
+                str(output_file),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("ffmpeg가 설치되어 있지 않아 오디오 병합을 진행할 수 없습니다.") from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"ffmpeg 병합 실패: {exc.stderr}") from exc
+    finally:
+        concat_list.unlink(missing_ok=True)
+
+
 def safe_folder_name(name: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9가-힣._-]+", "-", name).strip("-.")
     return cleaned or "untitled"
@@ -70,6 +104,7 @@ def main() -> None:
     parser.add_argument("--pitch", default=os.getenv("EDGE_TTS_PITCH", "+0Hz"))
     parser.add_argument("--format", default="mp3")
     parser.add_argument("--output-dir", default="audio")
+    parser.add_argument("--merge", action="store_true", help="분할 오디오를 하나의 full 파일로 병합")
     args = parser.parse_args()
 
     source = Path(args.input_file)
@@ -88,10 +123,17 @@ def main() -> None:
         print(out_file)
         return
 
+    part_files: list[Path] = []
     for idx, chunk in enumerate(chunks, start=1):
         out_file = out_dir / f"part{idx:02d}.{args.format}"
         asyncio.run(tts_to_file(chunk, out_file, args.voice, args.rate, args.pitch))
+        part_files.append(out_file)
         print(out_file)
+
+    if args.merge:
+        merged_file = out_dir / f"full.{args.format}"
+        merge_audio_files(part_files, merged_file)
+        print(merged_file)
 
 
 if __name__ == "__main__":
